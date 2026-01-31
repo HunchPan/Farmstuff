@@ -1,0 +1,31 @@
+# Gradle
+.gradle/
+build/
+out/
+
+# Keep the wrapper jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# IntelliJ
+.idea/
+*.iml
+workspace.xml
+tasks.xml
+
+# VS Code
+.vscode/
+
+# Java / build artifacts
+*.class
+*.log
+*.jar
+/build/libs/
+/build/tmp/
+/target/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+.env
