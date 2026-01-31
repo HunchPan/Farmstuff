@@ -1,0 +1,15 @@
+name: farmstuff
+version: '1.0-SNAPSHOT'
+main: org.farmstuff.farmstuff.Farmstuff
+api-version: '1.21'
+commands:
+  trampling:
+    description: disable or enable player trampling
+    usage: /trampling [on/off|menu|<player> <on/off>]
+    permission: farmstuff.trampling
+    permission-message: You don't have permission to use this command.
+
+  permissions:
+    farmstuff.trampling:
+      default: op
+
