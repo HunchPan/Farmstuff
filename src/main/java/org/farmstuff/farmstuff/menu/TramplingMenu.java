@@ -92,8 +92,8 @@ public class TramplingMenu implements InventoryHandler {
     }
 
     public void openMenu(Player player) {
-        inventory.clear(); // Clear existing items
-        initializeItems(player); // Pass player to check permissions
+        inventory.clear(); 
+        initializeItems(player); 
         GUIManager.getInstance().registerHandledInventory(this.inventory, this);
         player.openInventory(this.inventory);
     }
