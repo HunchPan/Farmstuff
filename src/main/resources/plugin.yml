@@ -1,5 +1,5 @@
 name: farmstuff
-version: '1.0-SNAPSHOT'
+version: '1.1'
 main: org.farmstuff.farmstuff.Farmstuff
 api-version: '1.21'
 commands:
