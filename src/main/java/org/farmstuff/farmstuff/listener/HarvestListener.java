@@ -7,11 +7,13 @@ import org.bukkit.block.data.BlockData;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.plugin.java.JavaPlugin;
 import java.util.Random;
 import org.bukkit.event.Listener;
 
@@ -85,30 +87,30 @@ public class HarvestListener implements Listener {
         }
     }
 
-    public int calculateFortuneMultiplier(int fortuneLevel){
+    public int calculateFortuneMultiplier(CropType cropType, int fortuneLevel){
 
         Random random = new Random();
-        int ranNum = random.nextInt(100);
 
-        switch (fortuneLevel) {
-            case 1:
-                if (ranNum < 66) return 1; //66% for 1x
-                else return 2; // 33% for 2x
+        // base number of binomial attempts
+        int attempts = 3 + fortuneLevel;
 
-            case 2:
-                if (ranNum < 50) return 1; //50% for 1x
-                else if (ranNum < 75) return 2; // 25% for 2x
-                else return 3; // 25% for 3x
-
-            case 3:
-                if (ranNum < 40) return 1; // 40% 1x
-                else if (ranNum < 60) return 2; // 20%
-                else if (ranNum < 80) return 3; // 20%
-                else return 4; // 20%
-
-            default:
-                return 1;
+        // binomial distribution with p=0.57
+        int bonusDrops = 0;
+        for (int i = 0; i < attempts; i++){
+            if (random.nextDouble() <0.57){
+                bonusDrops++;
+            }
         }
+
+        // 2 drops minimum from carrots and potatoes
+        if (cropType == CropType.CARROTS || cropType == CropType.POTATOES) {
+            return 2 + bonusDrops;
+        }
+
+        if (cropType == CropType.WHEAT || cropType == CropType.BEETROOTS) {
+            return 1 + bonusDrops;
+        }
+        return bonusDrops;
     }
 
     private void triggerRareEvent(Block block, Player player) {
@@ -122,80 +124,103 @@ public class HarvestListener implements Listener {
         }
     }
 
+    private void applyHoeDurability(ItemStack hoe, ItemMeta meta, Block block, Player player) {
+        if (hoe.getType().getMaxDurability() <= 0) return;
 
-    @EventHandler
+        org.bukkit.inventory.meta.Damageable damage = (org.bukkit.inventory.meta.Damageable) hoe.getItemMeta();
+        if (damage == null) return;
+
+        int unbreakingLevel = 0;
+        if (meta != null && meta.hasEnchant(Enchantment.UNBREAKING)) {
+            unbreakingLevel = meta.getEnchantLevel(Enchantment.UNBREAKING);
+        }
+
+        // calculate chance to not consume durability
+        Random random = new Random();
+        // unbreaking logic 100/level+1
+        int chance = random.nextInt(100 + unbreakingLevel * 100);
+
+        if (chance < 100) {
+            int currentDamage = damage.getDamage();
+            damage.setDamage(currentDamage + 1);
+
+            // check if the hoe should break
+            if (damage.getDamage() >= hoe.getType().getMaxDurability()) {
+                player.getInventory().setItemInMainHand(new ItemStack(Material.AIR));
+                block.getWorld().playSound(block.getLocation(), org.bukkit.Sound.ENTITY_ITEM_BREAK, 1.0f, 1.0f);
+            } else {
+                hoe.setItemMeta(damage);
+            }
+        }
+    }
+
+    private int getFortuneLevel(ItemMeta meta) {
+        if (meta != null && meta.hasEnchant(Enchantment.FORTUNE)) {
+            return meta.getEnchantLevel(Enchantment.FORTUNE);
+        }
+        return 0;
+    }
+
+    private void dropCropItems(Block block, CropType cropType, HoeType hoeType, int fortuneLevel) {
+        int seedDrops = calculateFortuneMultiplier(cropType, fortuneLevel);
+        block.getWorld().dropItemNaturally(block.getLocation(), new ItemStack(cropType.getSeedItem(), seedDrops));
+
+        // drop crop item if separate. wheat item, beetroot item only affected by hoe tier
+        if (cropType.hasSeparateCropItem()) {
+            int cropAmount = hoeType.getDropMultiplier();
+            block.getWorld().dropItemNaturally(block.getLocation(), new ItemStack(cropType.getCropItem(), cropAmount));
+        }
+    }
+
+    private void resetCropAge(Block block, Ageable crop) {
+        crop.setAge(0);
+        block.setBlockData(crop);
+    }
+
+
+    @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGHEST)
     public void onRightClickCrop(PlayerInteractEvent e){
-        // check if it's right click
+        if (e.getHand() != EquipmentSlot.HAND) return;
         if (e.getAction() != Action.RIGHT_CLICK_BLOCK) return;
+
         Block block = e.getClickedBlock();
         if (block == null) return;
+
         BlockData data = block.getBlockData();
         if (!(data instanceof Ageable)) return;
         Ageable crop = (Ageable) data;
 
-        // skip because not fully grown
         if (crop.getAge() < crop.getMaximumAge()) return;
 
-        // checks for player item in hand
-        ItemStack inHand = e.getPlayer().getInventory().getItemInMainHand();
-        ItemMeta meta = inHand.getItemMeta();
-
-        // applies fortune enchant effect
-        int fortuneLevel = 0;
-        int fortuneMultiplier = 1;
-        if (meta != null && meta.hasEnchant(Enchantment.FORTUNE)){
-            fortuneLevel = meta.getEnchantLevel(Enchantment.FORTUNE);
-            fortuneMultiplier = calculateFortuneMultiplier(fortuneLevel);
-        }
-
-        // applies durability
-        if (inHand.getType().getMaxDurability() > 0) {
-            org.bukkit.inventory.meta.Damageable damage = (org.bukkit.inventory.meta.Damageable) inHand.getItemMeta();
-            if (damage != null) {
-                int unbreakingLevel = 0;
-                if (meta != null && meta.hasEnchant(Enchantment.UNBREAKING)){
-                    unbreakingLevel = meta.getEnchantLevel(Enchantment.UNBREAKING);
-                }
-
-                // calculate chance to not consume durability
-                Random random = new Random();
-
-                // unbreaking logic 100/level+1
-                int chance = random.nextInt(100 + unbreakingLevel * 100);
-
-                if (chance < 100) {
-                    int currentDamage = damage.getDamage();
-                    damage.setDamage(currentDamage + 1);
-
-                    // check if the hoe should break
-                    if (damage.getDamage() >= inHand.getType().getMaxDurability()) {
-                        e.getPlayer().getInventory().setItemInMainHand(new ItemStack(Material.AIR));
-                        block.getWorld().playSound(block.getLocation(), org.bukkit.Sound.ENTITY_ITEM_BREAK, 1.0f, 1.0f);
-                    } else {
-                        inHand.setItemMeta(damage);
-                    }
-                }
-            }
-        }
+        Player player = e.getPlayer();
+        ItemStack inHand = player.getInventory().getItemInMainHand();
 
         HoeType hoeType = HoeType.fromMaterial(inHand.getType());
         if (hoeType == null) return;
 
         CropType cropType = CropType.fromCrop(block.getType());
-        crop.setAge(0);
-        block.setBlockData(crop);
+        if (cropType == null) return;
 
-        int baseAmount = hoeType.getDropMultiplier();
-        int finalAmount = baseAmount * fortuneMultiplier;
+        ItemMeta meta = inHand.getItemMeta();
 
-        block.getWorld().dropItemNaturally(block.getLocation(), new ItemStack(cropType.getCropItem(), finalAmount));
-        if(cropType.hasSeparateCropItem()) {
-            block.getWorld().dropItemNaturally(block.getLocation(), new ItemStack(cropType.getSeedItem()));
-        }
+        applyHoeDurability(inHand, meta, block, player);
 
-        triggerRareEvent(block, e.getPlayer());
+        resetCropAge(block, crop);
+
+        int fortuneLevel = getFortuneLevel(meta);
+        dropCropItems(block, cropType, hoeType, fortuneLevel);
+
+        triggerRareEvent(block, player);
+
         e.setCancelled(true);
+    }
 
-
+    // circumvent breaking crop any other way other than hoe right click
+    @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGHEST)
+    public void onCropBreak(BlockBreakEvent e){
+        Block block = e.getBlock();
+        CropType cropType = CropType.fromCrop(block.getType());
+        if (cropType == null) return;
+        e.setCancelled(true);
     }
 }

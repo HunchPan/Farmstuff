@@ -9,7 +9,16 @@ commands:
     permission: farmstuff.trampling
     permission-message: You don't have permission to use this command.
 
-  permissions:
-    farmstuff.trampling:
-      default: op
-
+permissions:
+  farmstuff.trampling:
+    description: Base trampling command permission
+    default: true
+  farmstuff.trampling.self:
+    description: Allows players to toggle their own trampling settings
+    default: true
+  farmstuff.trampling.others:
+    description: Allows changing other players' trampling settings
+    default: op
+  farmstuff.trampling.global:
+    description: Allows changing global trampling settings
+    default: op

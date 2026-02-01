@@ -5,6 +5,7 @@ import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.farmstuff.farmstuff.config.TramplingConfigManager;
@@ -16,7 +17,7 @@ public class TramplingListener implements Listener {
         this.configManager = configManager;
     }
 
-    @EventHandler
+    @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGHEST)
     public void onPlayerTrample(PlayerInteractEvent e){
 
         if (e.getAction() != Action.PHYSICAL) return;
